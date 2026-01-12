@@ -33,34 +33,39 @@ void vRequest(void *pvParameters)
     while (1)
     {
         state = gpio_get_level(sensorPin);
-        vTaskDelay(pdMS_TO_TICKS(10));
+        if (state == 1)
+        {
+            vTaskDelay(pdMS_TO_TICKS(2000));
+        }
+        else
+        {
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
     }
 }
 
-void vBlink(void *pvParameters)
+void vLight(void *pvParameters)
 {
     while (1)
     {
         if (state == 1)
         {
-            gpio_set_level(ledPin, 1);
-            if (ledState == 0)
+            ledState = !ledState;
+            gpio_set_level(ledPin, ledState);
+            if (ledState == 1)
             {
-                printf("Motion detected!\n");
-                ledState = 1;
+                printf("Lights on!\n");
             }
+            else
+            {
+                printf("Lights off!\n");
+            }
+            vTaskDelay(pdMS_TO_TICKS(3000));
         }
         else
         {
-            gpio_set_level(ledPin, 0);
-            if (ledState == 1)
-            {
-                printf("Motion ended!\n");
-                ledState = 0;
-            }
+            vTaskDelay(pdMS_TO_TICKS(700));
         }
-
-        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
@@ -69,5 +74,5 @@ void app_main(void)
     setup();
 
     xTaskCreate(vRequest, "Request", 2048, NULL, 2, NULL);
-    xTaskCreate(vBlink,   "Blink",   2048, NULL, 1, NULL);
+    xTaskCreate(vLight,   "Light",   2048, NULL, 1, NULL);
 }
