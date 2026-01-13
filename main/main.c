@@ -4,28 +4,41 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
+#include "dht.h"
 
 static const char *TAG = "example";
 
-/* Use project configuration menu (idf.py menuconfig) to choose the GPIO to blink,
-   or you can edit the following line and set a number here.
-*/
-#define BLINK_GPIO CONFIG_BLINK_GPIO
 
-#include "freertos/task.h"
-#include "driver/gpio.h"
-#include <stdio.h>
+#define DHT_TYPE DHT_TYPE_AM2301
+#define DHT_DATA_GPIO 11
+
 
 int ledPin = 10;
 int sensorPin = 9;
-
-volatile int state = 0;   // ОБЩАЯ переменная
+volatile int state = 0;   // ОБЩАЯ переменная. Меняется в vRequeest
 volatile int ledState = 0;
 
 void setup()
 {
     gpio_set_direction(ledPin, GPIO_MODE_OUTPUT);
     gpio_set_direction(sensorPin, GPIO_MODE_INPUT);
+}
+
+void vDHT_read(void *pvParameters)
+{
+    float temperature, humidity;
+    while(1)
+    {
+        if (dht_read_float_data(DHT_TYPE, DHT_DATA_GPIO, &humidity, &temperature) == ESP_OK)
+        {
+            printf("Humidity: %.1f%% Temp: %.1fC\n", humidity, temperature);
+        }
+        else
+        {
+            printf("Could not read data from sensor\n");
+        }
+        vTaskDelay(pdMS_TO_TICKS(3000));
+    }
 }
 
 void vRequest(void *pvParameters)
@@ -75,4 +88,5 @@ void app_main(void)
 
     xTaskCreate(vRequest, "Request", 2048, NULL, 2, NULL);
     xTaskCreate(vLight,   "Light",   2048, NULL, 1, NULL);
+    xTaskCreate(vDHT_read, "DHT_read", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
 }
