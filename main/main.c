@@ -31,6 +31,7 @@ volatile int ledState = 0;
 float g_temperature = 0;        //Температура
 
 
+static bool mqtt_connected = false;
 
 static esp_mqtt_client_handle_t client;
 
@@ -45,6 +46,8 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base,
             ESP_LOGI("MQTT", "Connected");
             esp_mqtt_client_subscribe(client, "home/boiler/set", 0);
             esp_mqtt_client_subscribe(client, "home/ac/set", 0);
+
+            mqtt_connected = true;
             break;
 
         case MQTT_EVENT_DATA:
@@ -67,6 +70,9 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base,
             }
             break;
         }
+        case MQTT_EVENT_DISCONNECTED:
+            mqtt_connected = false;
+            break;
 
         default:
             break;
@@ -104,13 +110,15 @@ void vDHT_read(void *pvParameters)
 
             
             //Публикация данных mqtt
-            char msg[50];
-            snprintf(msg, sizeof(msg), "%.1f", temperature);
-            esp_mqtt_client_publish(client, "home/temperature", msg, 0, 1, 0);
+            if (mqtt_connected)
+            {
+                char msg[50];
+                snprintf(msg, sizeof(msg), "%.1f", temperature);
+                esp_mqtt_client_publish(client, "home/temperature", msg, 0, 1, 0);
 
-            snprintf(msg, sizeof(msg), "%.1f", humidity);
-            esp_mqtt_client_publish(client, "home/humidity", msg, 0, 1, 0);
-            
+                snprintf(msg, sizeof(msg), "%.1f", humidity);
+                esp_mqtt_client_publish(client, "home/humidity", msg, 0, 1, 0);
+            }
 
 
             printf("Humidity: %.1f%% Temp: %.1fC\n", humidity, temperature);
@@ -139,10 +147,12 @@ void vRequest(void *pvParameters)
 
         
         //Публикация данных mqtt
-        char motion_msg[10];
-        snprintf(motion_msg, sizeof(motion_msg), "%d", state);
-        esp_mqtt_client_publish(client, "home/motion", motion_msg, 0, 1, 0);
-        
+        if (mqtt_connected)
+        {
+            char motion_msg[10];
+            snprintf(motion_msg, sizeof(motion_msg), "%d", state);
+            esp_mqtt_client_publish(client, "home/motion", motion_msg, 0, 1, 0);
+        }    
     }
 }
 
@@ -206,7 +216,7 @@ void vClimate(void *pvParameters)
 void app_main(void)
 {
     setup();
-    wifi_init("MyWiFi", "MyPassword");
+    wifi_init("RT-GPON-AB1D", "fD2JAWsV");
     mqtt_app_start();
     xTaskCreate(vRequest, "Request", 2048, NULL, 2, NULL);
     xTaskCreate(vLight,   "Light",   2048, NULL, 1, NULL);
