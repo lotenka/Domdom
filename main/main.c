@@ -5,7 +5,8 @@
 #include "esp_log.h"
 #include "sdkconfig.h"
 #include "dht.h"
-//#include "mqtt_client.h"
+
+#include "mqtt_client.h"
 
 #include "wifi_manager.h"
 
@@ -19,7 +20,7 @@ static const char *TAG = "example";
 #define RELAY_PIN 5             // GPIO для реле
 #define AC_PIN 6
 
-//#define MQTT_BROKER "mqtt://broker.hivemq.com"
+#define MQTT_BROKER "mqtt://broker.hivemq.com"
 
 
 
@@ -30,7 +31,7 @@ volatile int ledState = 0;
 float g_temperature = 0;        //Температура
 
 
-/*
+
 static esp_mqtt_client_handle_t client;
 
 void mqtt_event_handler(void *handler_args, esp_event_base_t base,
@@ -83,7 +84,7 @@ void mqtt_app_start(void)
     esp_mqtt_client_start(client);
 }
 
-*/
+
 void setup()
 {
     gpio_set_direction(RELAY_PIN, GPIO_MODE_OUTPUT);
@@ -101,7 +102,7 @@ void vDHT_read(void *pvParameters)
         {
             g_temperature = temperature;
 
-            /*
+            
             //Публикация данных mqtt
             char msg[50];
             snprintf(msg, sizeof(msg), "%.1f", temperature);
@@ -109,7 +110,7 @@ void vDHT_read(void *pvParameters)
 
             snprintf(msg, sizeof(msg), "%.1f", humidity);
             esp_mqtt_client_publish(client, "home/humidity", msg, 0, 1, 0);
-            */
+            
 
 
             printf("Humidity: %.1f%% Temp: %.1fC\n", humidity, temperature);
@@ -136,12 +137,12 @@ void vRequest(void *pvParameters)
             vTaskDelay(pdMS_TO_TICKS(10));
         }
 
-        /*
+        
         //Публикация данных mqtt
         char motion_msg[10];
         snprintf(motion_msg, sizeof(motion_msg), "%d", state);
         esp_mqtt_client_publish(client, "home/motion", motion_msg, 0, 1, 0);
-        */
+        
     }
 }
 
@@ -205,8 +206,8 @@ void vClimate(void *pvParameters)
 void app_main(void)
 {
     setup();
-    //mqtt_app_start();
     wifi_init("MyWiFi", "MyPassword");
+    mqtt_app_start();
     xTaskCreate(vRequest, "Request", 2048, NULL, 2, NULL);
     xTaskCreate(vLight,   "Light",   2048, NULL, 1, NULL);
     xTaskCreate(vDHT_read, "DHT_read", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
