@@ -206,7 +206,7 @@ void app_main(void)
 {
     setup();
     //mqtt_app_start();
-    wifi_init();
+    wifi_init("MyWiFi", "MyPassword");
     xTaskCreate(vRequest, "Request", 2048, NULL, 2, NULL);
     xTaskCreate(vLight,   "Light",   2048, NULL, 1, NULL);
     xTaskCreate(vDHT_read, "DHT_read", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);

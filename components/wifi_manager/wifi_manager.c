@@ -11,8 +11,8 @@
 
 #include "wifi_manager.h"
 
-#define WIFI_SSID "YOUR_SSID"
-#define WIFI_PASS "YOUR_PASSWORD"
+static char s_ssid[33];
+static char s_pass[65];
 #define MAX_RETRY 5
 
 static EventGroupHandle_t s_wifi_event_group;
@@ -52,7 +52,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
-void wifi_init(void)
+void wifi_init(const char *ssid, const char *password)
 {
     s_wifi_event_group = xEventGroupCreate();
 
@@ -75,14 +75,17 @@ void wifi_init(void)
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
         IP_EVENT, IP_EVENT_STA_GOT_IP,
         &event_handler, NULL, &instance_got_ip));
-
+    
+    strncpy(s_ssid, ssid, sizeof(s_ssid));
+    strncpy(s_pass, password, sizeof(s_pass));
     wifi_config_t wifi_config = {
         .sta = {
-            .ssid = WIFI_SSID,
-            .password = WIFI_PASS,
             .threshold.authmode = WIFI_AUTH_WPA2_PSK,
         },
     };
+
+    strncpy((char *)wifi_config.sta.ssid, s_ssid, sizeof(wifi_config.sta.ssid));
+    strncpy((char *)wifi_config.sta.password, s_pass, sizeof(wifi_config.sta.password));
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
