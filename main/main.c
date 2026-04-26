@@ -10,7 +10,7 @@
 
 #include "wifi_manager.h"
 
-
+#include "light.h"
 
 static const char *TAG = "example";
 
@@ -23,8 +23,6 @@ static const char *TAG = "example";
 #define MQTT_BROKER "mqtt://broker.hivemq.com"
 
 
-
-int ledPin = 10;
 int sensorPin = 9;
 volatile int state = 0;         // ОБЩАЯ переменная. Меняется в vRequeest
 volatile int ledState = 0;
@@ -46,6 +44,7 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base,
             ESP_LOGI("MQTT", "Connected");
             esp_mqtt_client_subscribe(client, "home/boiler/set", 0);
             esp_mqtt_client_subscribe(client, "home/ac/set", 0);
+            esp_mqtt_client_subscribe(client, "home/light/set", 0);
 
             mqtt_connected = true;
             break;
@@ -67,6 +66,21 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base,
             else if (strcmp(topic, "home/ac/set") == 0)
             {
                 gpio_set_level(AC_PIN, atoi(data));
+            }
+            else if (strcmp(topic, "home/light/set") == 0)   // ← ВОТ СЮДА
+            {
+                int val = atoi(data); // 0–255
+
+                if (val < 0) val = 0;
+                if (val > 255) val = 255;
+
+                set_brightness(val);
+                if (mqtt_connected)
+                {
+                    char msg[10];
+                    snprintf(msg, sizeof(msg), "%d", val);
+                    esp_mqtt_client_publish(client, "home/light/state", msg, 0, 1, 0);
+                }
             }
             break;
         }
@@ -95,7 +109,7 @@ void setup()
 {
     gpio_set_direction(RELAY_PIN, GPIO_MODE_OUTPUT);
     gpio_set_level(RELAY_PIN, 0); // котёл выкл
-    gpio_set_direction(ledPin, GPIO_MODE_OUTPUT);
+    //gpio_set_direction(ledPin, GPIO_MODE_OUTPUT); //Для старого light без диммирования
     gpio_set_direction(sensorPin, GPIO_MODE_INPUT);
 }
 
@@ -156,31 +170,6 @@ void vRequest(void *pvParameters)
     }
 }
 
-void vLight(void *pvParameters)
-{
-    while (1)
-    {
-        if (state == 1)
-        {
-            ledState = !ledState;
-            gpio_set_level(ledPin, ledState);
-            if (ledState == 1)
-            {
-                printf("Lights on!\n");
-            }
-            else
-            {
-                printf("Lights off!\n");
-            }
-            vTaskDelay(pdMS_TO_TICKS(3000));
-        }
-        else
-        {
-            vTaskDelay(pdMS_TO_TICKS(700));
-        }
-    }
-}
-
 
 //Управление котлом и кондиционером
 void vClimate(void *pvParameters)
@@ -213,11 +202,30 @@ void vClimate(void *pvParameters)
     }
 }
 
+void vLight(void *pvParameters)
+{
+    while (1)
+    {
+        if (state == 1)
+        {
+            set_brightness(200); // ярко при движении
+        }
+        else
+        {
+            set_brightness(20); // тускло
+        }
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
 void app_main(void)
 {
     setup();
     wifi_init("RT-GPON-AB1D", "fD2JAWsV");
     mqtt_app_start();
+    light_init();
+
+    set_brightness(100); // тест
     xTaskCreate(vRequest, "Request", 2048, NULL, 2, NULL);
     xTaskCreate(vLight,   "Light",   2048, NULL, 1, NULL);
     xTaskCreate(vDHT_read, "DHT_read", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
