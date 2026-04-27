@@ -15,7 +15,7 @@
 static const char *TAG = "example";
 
 #define DHT_TYPE DHT_TYPE_AM2301
-#define DHT_DATA_GPIO 11
+#define DHT_DATA_GPIO 4
 
 #define RELAY_PIN 5             // GPIO для реле
 #define AC_PIN 6
@@ -118,15 +118,21 @@ void vDHT_read(void *pvParameters)
     float temperature, humidity;
     while(1)
     {
+        vTaskDelay(pdMS_TO_TICKS(50));
         if (dht_read_float_data(DHT_TYPE, DHT_DATA_GPIO, &humidity, &temperature) == ESP_OK)
         {
             g_temperature = temperature;
 
             
             //Публикация данных mqtt
-            if (mqtt_connected)
+            static TickType_t last_pub = 0;
+
+            if (mqtt_connected && (xTaskGetTickCount() - last_pub > pdMS_TO_TICKS(3000)))
             {
+                last_pub = xTaskGetTickCount();
+
                 char msg[50];
+
                 snprintf(msg, sizeof(msg), "%.1f", temperature);
                 esp_mqtt_client_publish(client, "home/temperature", msg, 0, 1, 0);
 
@@ -141,32 +147,31 @@ void vDHT_read(void *pvParameters)
         {
             printf("Could not read data from sensor\n");
         }
-        vTaskDelay(pdMS_TO_TICKS(3000));
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
 
 void vRequest(void *pvParameters)
 {
+    int last_state = -1;
+
     while (1)
     {
         state = gpio_get_level(sensorPin);
-        if (state == 1)
+
+        if (state != last_state)
         {
-            vTaskDelay(pdMS_TO_TICKS(2000));
-        }
-        else
-        {
-            vTaskDelay(pdMS_TO_TICKS(10));
+            last_state = state;
+
+            if (mqtt_connected)
+            {
+                char motion_msg[10];
+                snprintf(motion_msg, sizeof(motion_msg), "%d", state);
+                esp_mqtt_client_publish(client, "home/motion", motion_msg, 0, 1, 0);
+            }
         }
 
-        
-        //Публикация данных mqtt
-        if (mqtt_connected)
-        {
-            char motion_msg[10];
-            snprintf(motion_msg, sizeof(motion_msg), "%d", state);
-            esp_mqtt_client_publish(client, "home/motion", motion_msg, 0, 1, 0);
-        }    
+        vTaskDelay(pdMS_TO_TICKS(200));
     }
 }
 
@@ -226,8 +231,8 @@ void app_main(void)
     light_init();
 
     set_brightness(100); // тест
-    xTaskCreate(vRequest, "Request", 2048, NULL, 2, NULL);
-    xTaskCreate(vLight,   "Light",   2048, NULL, 1, NULL);
+    xTaskCreate(vRequest, "Request", 4096, NULL, 2, NULL);
+    xTaskCreate(vLight,   "Light",   4096, NULL, 1, NULL);
     xTaskCreate(vDHT_read, "DHT_read", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
     xTaskCreate(vClimate, "Climate", 2048, NULL, 2, NULL);
 }
