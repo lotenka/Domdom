@@ -2,7 +2,7 @@
 #include "driver/ledc.h"
 #include <stdio.h>
 
-#define LED_PIN       10
+#define LED_PIN       8
 #define LEDC_CHANNEL  LEDC_CHANNEL_0
 #define LEDC_TIMER    LEDC_TIMER_0
 #define LEDC_MODE     LEDC_LOW_SPEED_MODE

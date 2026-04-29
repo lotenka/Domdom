@@ -23,11 +23,12 @@ static const char *TAG = "example";
 #define MQTT_BROKER "mqtt://broker.hivemq.com"
 
 
-int sensorPin = 9;
+int sensorPin = 7;
 volatile int state = 0;         // ОБЩАЯ переменная. Меняется в vRequeest
 volatile int ledState = 0;
 float g_temperature = 0;        //Температура
 
+int auto_mode = 1; // 1 = по датчику, 0 = вручную
 
 static bool mqtt_connected = false;
 
@@ -66,6 +67,10 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base,
             else if (strcmp(topic, "home/ac/set") == 0)
             {
                 gpio_set_level(AC_PIN, atoi(data));
+            }
+            else if (strcmp(topic, "home/light/mode") == 0)
+            {
+                auto_mode = atoi(data);
             }
             else if (strcmp(topic, "home/light/set") == 0)   // ← ВОТ СЮДА
             {
@@ -109,7 +114,6 @@ void setup()
 {
     gpio_set_direction(RELAY_PIN, GPIO_MODE_OUTPUT);
     gpio_set_level(RELAY_PIN, 0); // котёл выкл
-    //gpio_set_direction(ledPin, GPIO_MODE_OUTPUT); //Для старого light без диммирования
     gpio_set_direction(sensorPin, GPIO_MODE_INPUT);
 }
 
@@ -209,17 +213,35 @@ void vClimate(void *pvParameters)
 
 void vLight(void *pvParameters)
 {
+    int last_state = 0;
+
     while (1)
     {
-        if (state == 1)
+        if (auto_mode)
         {
-            set_brightness(200); // ярко при движении
+            // Ловим ФРОНТ (0 -> 1)
+            if (state == 1 && last_state == 0)
+            {
+                // переключаем состояние
+                static int light_on = 0;
+                light_on = !light_on;
+
+                if (light_on)
+                {
+                    set_brightness(200);
+                    printf("TOGGLE → Light ON\n");
+                }
+                else
+                {
+                    set_brightness(0);
+                    printf("TOGGLE → Light OFF\n");
+                }
+            }
         }
-        else
-        {
-            set_brightness(20); // тускло
-        }
-        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        last_state = state;
+
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -229,8 +251,8 @@ void app_main(void)
     wifi_init("RT-GPON-AB1D", "fD2JAWsV");
     mqtt_app_start();
     light_init();
-
-    set_brightness(100); // тест
+    //set_brightness(255); // тест
+    vTaskDelay(pdMS_TO_TICKS(100));
     xTaskCreate(vRequest, "Request", 4096, NULL, 2, NULL);
     xTaskCreate(vLight,   "Light",   4096, NULL, 1, NULL);
     xTaskCreate(vDHT_read, "DHT_read", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
