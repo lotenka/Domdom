@@ -17,8 +17,14 @@ static const char *TAG = "example";
 #define DHT_TYPE DHT_TYPE_AM2301
 #define DHT_DATA_GPIO 4
 
-#define RELAY_PIN 5             // GPIO для реле
+#define RELAY_PIN 5             // GPIO для реле (котел)
 #define AC_PIN 6
+#define AC_ON_TEMP     25.0
+#define AC_OFF_TEMP    23.0
+
+#define HEAT_ON_TEMP   21.0
+#define HEAT_OFF_TEMP  23.0
+
 
 #define MQTT_BROKER "mqtt://broker.hivemq.com"
 
@@ -27,6 +33,11 @@ int sensorPin = 7;
 volatile int state = 0;         // ОБЩАЯ переменная. Меняется в vRequeest
 volatile int ledState = 0;
 float g_temperature = 0;        //Температура
+int climate_state = 0; 
+// 0 = idle
+// 1 = heating
+// 2 = cooling
+
 
 int auto_mode = 1; // 1 = по датчику, 0 = вручную
 
@@ -185,29 +196,56 @@ void vClimate(void *pvParameters)
 {
     while (1)
     {
-        if (g_temperature > 25.0)
+        switch (climate_state)
         {
-            // включить кондиционер
-            gpio_set_level(AC_PIN, 1);
-            gpio_set_level(RELAY_PIN, 0);
-            printf("AC ON\n");
+            case 0: // IDLE
+                if (g_temperature >= AC_ON_TEMP)
+                {
+                    climate_state = 2;
+                    printf("Climate -> AC MODE\n");
+                }
+                else if (g_temperature <= HEAT_ON_TEMP)
+                {
+                    climate_state = 1;
+                    printf("Climate -> HEAT MODE\n");
+                }
+                break;
+
+            case 1: // HEATING
+                if (g_temperature >= HEAT_OFF_TEMP)
+                {
+                    climate_state = 0;
+                    printf("Climate -> IDLE\n");
+                }
+                break;
+
+            case 2: // COOLING
+                if (g_temperature <= AC_OFF_TEMP)
+                {
+                    climate_state = 0;
+                    printf("Climate -> IDLE\n");
+                }
+                break;
         }
-        else if (g_temperature < 22.0)
+
+        // Управление выходами
+        if (climate_state == 1)
         {
-            // включить котёл
             gpio_set_level(RELAY_PIN, 1);
             gpio_set_level(AC_PIN, 0);
-            printf("HEATER ON\n");
+        }
+        else if (climate_state == 2)
+        {
+            gpio_set_level(RELAY_PIN, 0);
+            gpio_set_level(AC_PIN, 1);
         }
         else
         {
-            // всё выключено
             gpio_set_level(RELAY_PIN, 0);
             gpio_set_level(AC_PIN, 0);
-            printf("IDLE\n");
         }
 
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        vTaskDelay(pdMS_TO_TICKS(3000));
     }
 }
 
