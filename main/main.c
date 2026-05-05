@@ -406,6 +406,8 @@ void vLight(void *pvParameters)
     {
         if (auto_mode)
         {
+            esp_mqtt_client_publish(client, "home/living/light/mode/state", 
+                        auto_mode ? "1" : "0", 0, 1, 0);
             // Ловим ФРОНТ (0 -> 1)
             if (state == 1 && last_state == 0)
             {
