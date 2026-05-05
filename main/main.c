@@ -77,11 +77,11 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base,
     {
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI("MQTT", "Connected");
+            esp_mqtt_client_subscribe(client, "home/living/light/set", 0);
+            esp_mqtt_client_subscribe(client, "home/living/ac/set", 0);
+            esp_mqtt_client_subscribe(client, "home/bedroom/humidifier/set", 0);
+            esp_mqtt_client_subscribe(client, "home/kitchen/curtain/set", 0);
             esp_mqtt_client_subscribe(client, "home/boiler/set", 0);
-            esp_mqtt_client_subscribe(client, "home/ac/set", 0);
-            esp_mqtt_client_subscribe(client, "home/light/set", 0);
-            esp_mqtt_client_subscribe(client, "home/climate/mode", 0);
-            esp_mqtt_client_subscribe(client, "home/climate/set", 0);
 
             mqtt_connected = true;
             break;
@@ -96,72 +96,65 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base,
 
             ESP_LOGI("MQTT", "Topic: %s Data: %s", topic, data);
 
+            // КОТЕЛ (весь дом)
             if (strcmp(topic, "home/boiler/set") == 0)
             {
                 gpio_set_level(RELAY_PIN, atoi(data));
             }
-            else if (strcmp(topic, "home/ac/set") == 0)
+
+            // КОНДИЦИОНЕР (гостиная)
+            else if (strcmp(topic, "home/living/ac/set") == 0)
             {
                 gpio_set_level(AC_PIN, atoi(data));
             }
-            else if (strcmp(topic, "home/climate/mode") == 0)
-            {
-                climate_mode = atoi(data);
-                printf("Climate mode: %d\n", climate_mode);
-            }
-            else if (strcmp(topic, "home/climate/set") == 0)
-            {
-                // ручное управление:
-                // 0 = всё выкл
-                // 1 = отопление
-                // 2 = охлаждение
 
-                if (climate_mode == 0)
-                {
-                    climate_state = atoi(data);
-                    printf("Manual climate state: %d\n", climate_state);
-                }
-            }           
-            else if (strcmp(topic, "home/humidifier/set") == 0)
+            // УВЛАЖНИТЕЛЬ (спальня)
+            else if (strcmp(topic, "home/bedroom/humidifier/set") == 0)
             {
                 int val = atoi(data);
                 gpio_set_level(HUMIDIFIER_PIN, val);
                 humidifier_state = val;
             }
-            else if (strcmp(topic, "home/light/mode") == 0)
+
+            // СВЕТ (гостиная)
+            else if (strcmp(topic, "home/living/light/set") == 0)
             {
-                auto_mode = atoi(data);
-            }
-            else if (strcmp(topic, "home/light/set") == 0)   // ← ВОТ СЮДА
-            {
-                int val = atoi(data); // 0–255
+                int val = atoi(data);
 
                 if (val < 0) val = 0;
                 if (val > 255) val = 255;
 
                 set_brightness(val);
+
                 if (mqtt_connected)
                 {
                     char msg[10];
                     snprintf(msg, sizeof(msg), "%d", val);
-                    esp_mqtt_client_publish(client, "home/light/state", msg, 0, 1, 0);
+                    esp_mqtt_client_publish(client, "home/living/light/state", msg, 0, 1, 0);
                 }
             }
-            else if (strcmp(topic, "home/curtain/set") == 0)
+
+            // РЕЖИМ СВЕТА (auto/manual)
+            else if (strcmp(topic, "home/living/light/mode") == 0)
             {
-                int angle = atoi(data); // 0–180
+                auto_mode = atoi(data);
+            }
+
+            // ЖАЛЮЗИ (кухня)
+            else if (strcmp(topic, "home/kitchen/curtain/set") == 0)
+            {
+                int angle = atoi(data);
 
                 if (angle < 0) angle = 0;
                 if (angle > 180) angle = 180;
 
                 curtain_set_angle(angle);
 
-                // отправка состояния
                 if (mqtt_connected)
                 {
                     char msg[10];
                     snprintf(msg, sizeof(msg), "%d", angle);
-                    esp_mqtt_client_publish(client, "home/curtain/state", msg, 0, 1, 0);
+                    esp_mqtt_client_publish(client, "home/kitchen/curtain/state", msg, 0, 1, 0);
                 }
             }
             break;
@@ -217,10 +210,10 @@ void vDHT_read(void *pvParameters)
                 char msg[50];
 
                 snprintf(msg, sizeof(msg), "%.1f", temperature);
-                esp_mqtt_client_publish(client, "home/temperature", msg, 0, 1, 0);
+                esp_mqtt_client_publish(client, "home/living/temperature", msg, 0, 1, 0);
 
                 snprintf(msg, sizeof(msg), "%.1f", humidity);
-                esp_mqtt_client_publish(client, "home/humidity", msg, 0, 1, 0);
+                esp_mqtt_client_publish(client, "home/living/humidity", msg, 0, 1, 0);
             }
 
 
@@ -250,7 +243,7 @@ void vRequest(void *pvParameters)
             {
                 char motion_msg[10];
                 snprintf(motion_msg, sizeof(motion_msg), "%d", state);
-                esp_mqtt_client_publish(client, "home/motion", motion_msg, 0, 1, 0);
+                esp_mqtt_client_publish(client, "home/living/motion", motion_msg, 0, 1, 0);
             }
         }
 
@@ -322,7 +315,7 @@ void vClimate(void *pvParameters)
         {
             char msg[10];
             snprintf(msg, sizeof(msg), "%d", climate_state);
-            esp_mqtt_client_publish(client, "home/climate/state", msg, 0, 1, 0);
+            esp_mqtt_client_publish(client, "home/living/climate/state", msg, 0, 1, 0);
         }
 
         vTaskDelay(pdMS_TO_TICKS(3000));
