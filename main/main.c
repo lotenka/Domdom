@@ -99,14 +99,32 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base,
             // КОТЕЛ (весь дом)
             if (strcmp(topic, "home/boiler/set") == 0)
             {
-                gpio_set_level(RELAY_PIN, atoi(data));
+                int val = atoi(data);
+                gpio_set_level(RELAY_PIN, val);
+
+                if (mqtt_connected)
+                {
+                    char msg[10];
+                    snprintf(msg, sizeof(msg), "%d", val);
+                    esp_mqtt_client_publish(client, "home/boiler/state", msg, 0, 1, 0);
+                }
             }
 
             // КОНДИЦИОНЕР (гостиная)
             else if (strcmp(topic, "home/living/ac/set") == 0)
             {
-                gpio_set_level(AC_PIN, atoi(data));
+
+                int val = atoi(data);
+                gpio_set_level(AC_PIN, val);
+
+                if (mqtt_connected)
+                {
+                    char msg[10];
+                    snprintf(msg, sizeof(msg), "%d", val);
+                    esp_mqtt_client_publish(client, "home/living/ac/state", msg, 0, 1, 0);
+                }
             }
+
 
             // УВЛАЖНИТЕЛЬ (спальня)
             else if (strcmp(topic, "home/bedroom/humidifier/set") == 0)
@@ -290,7 +308,7 @@ void vClimate(void *pvParameters)
                         printf("AUTO -> IDLE\n");
                     }
                     break;
-            }
+            }   
         }
 
         // --- Управление выходами (всегда одно место) ---
@@ -316,6 +334,19 @@ void vClimate(void *pvParameters)
             char msg[10];
             snprintf(msg, sizeof(msg), "%d", climate_state);
             esp_mqtt_client_publish(client, "home/living/climate/state", msg, 0, 1, 0);
+
+
+                char msg[10];
+
+            // кондиционер (0 или 1)
+            int ac_state = (climate_state == 2) ? 1 : 0;
+            snprintf(msg, sizeof(msg), "%d", ac_state);
+            esp_mqtt_client_publish(client, "home/living/ac/state", msg, 0, 1, 0);
+
+            // котёл (0 или 1)
+            int boiler_state = (climate_state == 1) ? 1 : 0;
+            snprintf(msg, sizeof(msg), "%d", boiler_state);
+            esp_mqtt_client_publish(client, "home/boiler/state", msg, 0, 1, 0);
         }
 
         vTaskDelay(pdMS_TO_TICKS(3000));
