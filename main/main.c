@@ -19,6 +19,7 @@ static const char *TAG = "example";
 
 #define RELAY_PIN 5             // GPIO для реле (котел)
 #define AC_PIN 6
+#define HUMIDIFIER_PIN 12   // GPIO увлажнитель
 
 
 #define MQTT_BROKER "mqtt://broker.hivemq.com"
@@ -48,6 +49,19 @@ int climate_mode = 0;
 // 1 = heating
 // 2 = cooling
 int climate_state = 0;
+
+//Увлажнитель
+float g_humidity = 0;
+
+int humidifier_state = 0; // 0 = OFF, 1 = ON
+
+#define HUM_LOW  40.0
+#define HUM_HIGH 50.0
+
+#define SWITCH_DELAY_MS 10000  // 10 сек защита от дребезга
+
+TickType_t last_switch_time = 0;
+
 
 static bool mqtt_connected = false;
 
@@ -107,7 +121,12 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base,
                     printf("Manual climate state: %d\n", climate_state);
                 }
             }           
-
+            else if (strcmp(topic, "home/humidifier/set") == 0)
+            {
+                int val = atoi(data);
+                gpio_set_level(HUMIDIFIER_PIN, val);
+                humidifier_state = val;
+            }
             else if (strcmp(topic, "home/light/mode") == 0)
             {
                 auto_mode = atoi(data);
@@ -155,6 +174,8 @@ void setup()
     gpio_set_direction(RELAY_PIN, GPIO_MODE_OUTPUT);
     gpio_set_level(RELAY_PIN, 0); // котёл выкл
     gpio_set_direction(sensorPin, GPIO_MODE_INPUT);
+    gpio_set_direction(HUMIDIFIER_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_level(HUMIDIFIER_PIN, 0); // увлажнитель выкл
 }
 
 void vDHT_read(void *pvParameters)
@@ -166,7 +187,7 @@ void vDHT_read(void *pvParameters)
         if (dht_read_float_data(DHT_TYPE, DHT_DATA_GPIO, &humidity, &temperature) == ESP_OK)
         {
             g_temperature = temperature;
-
+            g_humidity = humidity;
             
             //Публикация данных mqtt
             static TickType_t last_pub = 0;
@@ -290,6 +311,51 @@ void vClimate(void *pvParameters)
     }
 }
 
+
+void vHumidifier(void *pvParameters)    //Увлажнитель
+{
+    while (1)
+    {
+        TickType_t now = xTaskGetTickCount();
+
+        // --- ВКЛ ---
+        if (g_humidity < HUM_LOW && humidifier_state == 0)
+        {
+            if (now - last_switch_time > pdMS_TO_TICKS(SWITCH_DELAY_MS))
+            {
+                gpio_set_level(HUMIDIFIER_PIN, 1);
+                humidifier_state = 1;
+                last_switch_time = now;
+
+                printf("Humidifier ON (%.1f%%)\n", g_humidity);
+            }
+        }
+
+        // --- ВЫКЛ ---
+        else if (g_humidity > HUM_HIGH && humidifier_state == 1)
+        {
+            if (now - last_switch_time > pdMS_TO_TICKS(SWITCH_DELAY_MS))
+            {
+                gpio_set_level(HUMIDIFIER_PIN, 0);
+                humidifier_state = 0;
+                last_switch_time = now;
+
+                printf("Humidifier OFF (%.1f%%)\n", g_humidity);
+            }
+        }
+
+        if (mqtt_connected)
+        {
+            char msg[10];
+            snprintf(msg, sizeof(msg), "%d", humidifier_state);
+            esp_mqtt_client_publish(client, "home/humidifier/state", msg, 0, 1, 0);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+
 void vLight(void *pvParameters)
 {
     int last_state = 0;
@@ -337,4 +403,5 @@ void app_main(void)
     xTaskCreate(vLight,   "Light",   4096, NULL, 1, NULL);
     xTaskCreate(vDHT_read, "DHT_read", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
     xTaskCreate(vClimate, "Climate", 2048, NULL, 2, NULL);
+    xTaskCreate(vHumidifier, "Humidifier", 2048, NULL, 2, NULL);
 }
