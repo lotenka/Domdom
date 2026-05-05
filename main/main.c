@@ -5,6 +5,7 @@
 #include "esp_log.h"
 #include "sdkconfig.h"
 #include "dht.h"
+#include "curtain.h"
 
 #include "mqtt_client.h"
 
@@ -144,6 +145,23 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base,
                     char msg[10];
                     snprintf(msg, sizeof(msg), "%d", val);
                     esp_mqtt_client_publish(client, "home/light/state", msg, 0, 1, 0);
+                }
+            }
+            else if (strcmp(topic, "home/curtain/set") == 0)
+            {
+                int angle = atoi(data); // 0–180
+
+                if (angle < 0) angle = 0;
+                if (angle > 180) angle = 180;
+
+                curtain_set_angle(angle);
+
+                // отправка состояния
+                if (mqtt_connected)
+                {
+                    char msg[10];
+                    snprintf(msg, sizeof(msg), "%d", angle);
+                    esp_mqtt_client_publish(client, "home/curtain/state", msg, 0, 1, 0);
                 }
             }
             break;
@@ -396,7 +414,11 @@ void app_main(void)
     wifi_init("RT-GPON-AB1D", "fD2JAWsV");
     mqtt_app_start();
     light_init();
-    //set_brightness(255); // тест
+    curtain_init();     //сервопривод SG90 5V
+    //0 → закрыто
+    //90 → наполовину
+    //180 → открыто
+
     climate_mode = 0; // стартуем в manual
     vTaskDelay(pdMS_TO_TICKS(100));
     xTaskCreate(vRequest, "Request", 4096, NULL, 2, NULL);
