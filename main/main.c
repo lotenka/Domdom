@@ -82,6 +82,8 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base,
             esp_mqtt_client_subscribe(client, "home/bedroom/humidifier/set", 0);
             esp_mqtt_client_subscribe(client, "home/kitchen/curtain/set", 0);
             esp_mqtt_client_subscribe(client, "home/boiler/set", 0);
+            esp_mqtt_client_subscribe(client, "home/living/light/mode/set", 0);
+            esp_mqtt_client_subscribe(client, "home/living/climate/mode/set", 0);
 
             mqtt_connected = true;
             break;
@@ -125,7 +127,12 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base,
                 }
             }
 
-
+            // режим климата
+            else if (strcmp(topic, "home/living/climate/mode/set") == 0)
+            {
+                climate_mode = atoi(data);
+                printf("Climate mode: %d\n", climate_mode);
+            }
             // УВЛАЖНИТЕЛЬ (спальня)
             else if (strcmp(topic, "home/bedroom/humidifier/set") == 0)
             {
@@ -153,9 +160,10 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base,
             }
 
             // РЕЖИМ СВЕТА (auto/manual)
-            else if (strcmp(topic, "home/living/light/mode") == 0)
+            else if (strcmp(topic, "home/living/light/mode/set") == 0)
             {
                 auto_mode = atoi(data);
+                printf("Light mode: %d\n", auto_mode);
             }
 
             // ЖАЛЮЗИ (кухня)
@@ -334,9 +342,9 @@ void vClimate(void *pvParameters)
             char msg[10];
             snprintf(msg, sizeof(msg), "%d", climate_state);
             esp_mqtt_client_publish(client, "home/living/climate/state", msg, 0, 1, 0);
+            esp_mqtt_client_publish(client, "home/living/climate/mode/state", 
+                        climate_mode ? "1" : "0", 0, 1, 0);
 
-
-                char msg[10];
 
             // кондиционер (0 или 1)
             int ac_state = (climate_state == 2) ? 1 : 0;
@@ -406,8 +414,11 @@ void vLight(void *pvParameters)
     {
         if (auto_mode)
         {
-            esp_mqtt_client_publish(client, "home/living/light/mode/state", 
+            if (mqtt_connected)
+            {
+                esp_mqtt_client_publish(client, "home/living/light/mode/state", 
                         auto_mode ? "1" : "0", 0, 1, 0);
+            }
             // Ловим ФРОНТ (0 -> 1)
             if (state == 1 && last_state == 0)
             {
