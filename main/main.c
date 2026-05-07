@@ -317,25 +317,25 @@ void vClimate(void *pvParameters)
                     }
                     break;
             }   
-        }
+        
 
-        // --- Управление выходами (всегда одно место) ---
-        if (climate_state == 1)
-        {
-            gpio_set_level(RELAY_PIN, 1);
-            gpio_set_level(AC_PIN, 0);
+            // --- Управление выходами (всегда одно место) ---
+            if (climate_state == 1)
+            {
+                gpio_set_level(RELAY_PIN, 1);
+                gpio_set_level(AC_PIN, 0);
+            }
+            else if (climate_state == 2)
+            {
+                gpio_set_level(RELAY_PIN, 0);
+                gpio_set_level(AC_PIN, 1);
+            }
+            else
+            {
+                gpio_set_level(RELAY_PIN, 0);
+                gpio_set_level(AC_PIN, 0);
+            }
         }
-        else if (climate_state == 2)
-        {
-            gpio_set_level(RELAY_PIN, 0);
-            gpio_set_level(AC_PIN, 1);
-        }
-        else
-        {
-            gpio_set_level(RELAY_PIN, 0);
-            gpio_set_level(AC_PIN, 0);
-        }
-
         // --- Отправка состояния ---
         if (mqtt_connected)
         {
