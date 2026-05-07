@@ -19,7 +19,7 @@ static const char *TAG = "example";
 #define DHT_DATA_GPIO 4
 
 #define RELAY_PIN 5             // GPIO для реле (котел)
-#define AC_PIN 6
+#define AC_PIN 14
 #define HUMIDIFIER_PIN 12   // GPIO увлажнитель
 
 
@@ -208,11 +208,20 @@ void mqtt_app_start(void)
 
 void setup()
 {
+    // котёл
     gpio_set_direction(RELAY_PIN, GPIO_MODE_OUTPUT);
-    gpio_set_level(RELAY_PIN, 0); // котёл выкл
+    gpio_set_level(RELAY_PIN, 0);
+
+    // кондиционер
+    gpio_set_direction(AC_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_level(AC_PIN, 0);
+
+    // PIR
     gpio_set_direction(sensorPin, GPIO_MODE_INPUT);
+
+    // увлажнитель
     gpio_set_direction(HUMIDIFIER_PIN, GPIO_MODE_OUTPUT);
-    gpio_set_level(HUMIDIFIER_PIN, 0); // увлажнитель выкл
+    gpio_set_level(HUMIDIFIER_PIN, 0);
 }
 
 void vDHT_read(void *pvParameters)
