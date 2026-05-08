@@ -1,31 +1,29 @@
 #include "curtain.h"
+
 #include "driver/ledc.h"
-#include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define SERVO_PIN      13
+#define SERVO_PIN      9
 
-#define LEDC_CHANNEL   LEDC_CHANNEL_1
 #define LEDC_TIMER     LEDC_TIMER_1
 #define LEDC_MODE      LEDC_LOW_SPEED_MODE
+#define LEDC_CHANNEL   LEDC_CHANNEL_1
+
 #define LEDC_FREQ      50
 #define LEDC_RES       LEDC_TIMER_14_BIT
 
+#define SERVO_MIN_US   500
+#define SERVO_MAX_US   2500
+
 static uint32_t current_angle = 0;
 
-// преобразование угла → duty
 static uint32_t angle_to_duty(uint32_t angle)
 {
-    // 0.5ms–2.5ms из периода 20ms
-    // duty = (pulse_width / period) * 2^16
+    uint32_t us = SERVO_MIN_US +
+                  ((SERVO_MAX_US - SERVO_MIN_US) * angle / 180);
 
-    float min_us = 500.0;
-    float max_us = 2500.0;
-
-    float pulse = min_us + (angle / 180.0) * (max_us - min_us);
-
-    uint32_t duty = (pulse / 20000.0) * 65535;
+    uint32_t duty = (us * ((1 << 14) - 1)) / 20000;
 
     return duty;
 }
@@ -39,6 +37,7 @@ void curtain_init(void)
         .freq_hz = LEDC_FREQ,
         .clk_cfg = LEDC_AUTO_CLK
     };
+
     ledc_timer_config(&timer);
 
     ledc_channel_config_t channel = {
@@ -49,30 +48,23 @@ void curtain_init(void)
         .duty = 0,
         .hpoint = 0
     };
+
     ledc_channel_config(&channel);
 }
 
-// плавное движение
-void curtain_set_angle(uint32_t target)
+void curtain_set_angle(uint32_t angle)
 {
-    if (target > 180) target = 180;
+    if (angle > 180)
+        angle = 180;
 
-    while (current_angle != target)
-    {
-        if (current_angle < target)
-            current_angle++;
-        else
-            current_angle--;
+    current_angle = angle;
 
-        uint32_t duty = angle_to_duty(current_angle);
+    uint32_t duty = angle_to_duty(angle);
 
-        ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, duty);
-        ledc_update_duty(LEDC_MODE, LEDC_CHANNEL);
+    ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, duty);
+    ledc_update_duty(LEDC_MODE, LEDC_CHANNEL);
 
-        vTaskDelay(pdMS_TO_TICKS(20)); // плавность
-    }
-
-    printf("Curtain angle: %ld\n", current_angle);
+    printf("Curtain angle: %ld\n", angle);
 }
 
 uint32_t curtain_get_angle(void)
