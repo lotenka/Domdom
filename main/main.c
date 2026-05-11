@@ -131,7 +131,18 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base,
             else if (strcmp(topic, "home/living/climate/mode/set") == 0)
             {
                 climate_mode = atoi(data);
+
                 printf("Climate mode: %d\n", climate_mode);
+
+                // MANUAL MODE
+                if (climate_mode == 0)
+                {
+                    // даём питание устройствам
+                    gpio_set_level(RELAY_PIN, 1);
+                    gpio_set_level(AC_PIN, 1);
+
+                    printf("MANUAL MODE -> Devices enabled for manual control\n");
+                }
             }
             // УВЛАЖНИТЕЛЬ (спальня)
             else if (strcmp(topic, "home/bedroom/humidifier/set") == 0)
