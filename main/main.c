@@ -397,6 +397,10 @@ void vClimate(void *pvParameters)
             int boiler_state = (climate_state == 1) ? 1 : 0;
             snprintf(msg, sizeof(msg), "%d", boiler_state);
             esp_mqtt_client_publish(client, "home/boiler/state", msg, 0, 1, 0);
+            
+            char temp_msg[10];
+            snprintf(temp_msg, sizeof(temp_msg), "%.1f", target_temperature);
+            esp_mqtt_client_publish(client, "home/living/climate/target/state", temp_msg, 0, 1, 0);
         }
 
         vTaskDelay(pdMS_TO_TICKS(3000));
