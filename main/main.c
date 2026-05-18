@@ -31,15 +31,10 @@ volatile int state = 0;         // ОБЩАЯ переменная. Меняет
 volatile int ledState = 0;
 int auto_mode = 1; // 1 = по датчику, 0 = вручную LEDC
 
-// --- Климат ---
-#define AC_ON_TEMP     25.0
-#define AC_OFF_TEMP    23.0
-
-#define HEAT_ON_TEMP   21.0
-#define HEAT_OFF_TEMP  23.0
 
 float g_temperature = 0;
 
+float target_temperature = 25.0;
 // режим:
 // 0 = manual
 // 1 = auto
@@ -77,6 +72,7 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base,
     {
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI("MQTT", "Connected");
+            esp_mqtt_client_subscribe(client, "home/living/climate/target/set", 0);
             esp_mqtt_client_subscribe(client, "home/living/light/set", 0);
             esp_mqtt_client_subscribe(client, "home/living/ac/set", 0);
             esp_mqtt_client_subscribe(client, "home/bedroom/humidifier/set", 0);
@@ -111,7 +107,20 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base,
                     esp_mqtt_client_publish(client, "home/boiler/state", msg, 0, 1, 0);
                 }
             }
+            
+            else if (strcmp(topic, "home/living/climate/target/set") == 0)
+            {   
+                float temp = atof(data);
 
+                // защита
+                if (temp < 5.0) temp = 5.0;
+                if (temp > 40.0) temp = 40.0;
+
+                target_temperature = temp;
+
+                printf("Target temperature: %.1f\n",
+                    target_temperature);
+            }
             // КОНДИЦИОНЕР (гостиная)
             else if (strcmp(topic, "home/living/ac/set") == 0)
             {
@@ -306,38 +315,51 @@ void vClimate(void *pvParameters)
         // --- AUTO режим ---
         if (climate_mode == 1)
         {
+            float heat_on  = target_temperature - 2.0;
+            float cool_on  = target_temperature + 2.0;
+
             switch (climate_state)
             {
-                case 0: // IDLE
-                    if (g_temperature >= AC_ON_TEMP)
-                    {
-                        climate_state = 2;
-                        printf("AUTO -> AC ON\n");
-                    }
-                    else if (g_temperature <= HEAT_ON_TEMP)
+                case 0: // idle
+
+                    // холодно -> отопление
+                    if (g_temperature <= heat_on)
                     {
                         climate_state = 1;
                         printf("AUTO -> HEAT ON\n");
                     }
+
+                    // жарко -> кондиционер
+                    else if (g_temperature >= cool_on)
+                    {
+                        climate_state = 2;
+                        printf("AUTO -> AC ON\n");
+                    }
+
                     break;
 
-                case 1: // HEATING
-                    if (g_temperature >= HEAT_OFF_TEMP)
+                case 1: // heating
+
+                    // дошли до цели
+                    if (g_temperature >= target_temperature)
                     {
                         climate_state = 0;
-                        printf("AUTO -> IDLE\n");
+                        printf("AUTO -> HEAT OFF\n");
                     }
+
                     break;
 
-                case 2: // COOLING
-                    if (g_temperature <= AC_OFF_TEMP)
+                case 2: // cooling
+
+                    // дошли до цели
+                    if (g_temperature <= target_temperature)
                     {
                         climate_state = 0;
-                        printf("AUTO -> IDLE\n");
+                        printf("AUTO -> AC OFF\n");
                     }
+
                     break;
-            }   
-        
+            }
 
             // --- Управление выходами (всегда одно место) ---
             if (climate_state == 1)
