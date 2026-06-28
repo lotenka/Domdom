@@ -6,6 +6,7 @@
 #include "sdkconfig.h"
 #include "dht.h"
 #include "curtain.h"
+#include "lwip/netdb.h"
 
 #include "mqtt_client.h"
 
@@ -62,6 +63,21 @@ TickType_t last_switch_time = 0;
 static bool mqtt_connected = false;
 
 static esp_mqtt_client_handle_t client;
+
+void test_dns(void)
+{
+    struct hostent *he = gethostbyname("broker.hivemq.com");
+
+    if (he)
+    {
+        ESP_LOGI("DNS", "broker.hivemq.com resolved");
+    }
+    else
+    {
+        ESP_LOGE("DNS", "DNS failed");
+    }
+}
+
 
 void mqtt_event_handler(void *handler_args, esp_event_base_t base,
                         int32_t event_id, void *event_data)
@@ -495,6 +511,7 @@ void app_main(void)
 {
     setup();
     wifi_init("RT-GPON-AB1D", "fD2JAWsV");
+    test_dns();
     mqtt_app_start();
     light_init();
     curtain_init();     //сервопривод SG90 5V
@@ -505,8 +522,8 @@ void app_main(void)
     climate_mode = 0; // стартуем в manual
     vTaskDelay(pdMS_TO_TICKS(100));
     xTaskCreate(vRequest, "Request", 4096, NULL, 2, NULL);
-    xTaskCreate(vLight,   "Light",   4096, NULL, 1, NULL);
+    xTaskCreate(vLight,   "Light",   6144, NULL, 1, NULL);
     xTaskCreate(vDHT_read, "DHT_read", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
-    xTaskCreate(vClimate, "Climate", 2048, NULL, 2, NULL);
-    xTaskCreate(vHumidifier, "Humidifier", 2048, NULL, 2, NULL);
+    xTaskCreate(vClimate, "Climate", 6144, NULL, 2, NULL);
+    xTaskCreate(vHumidifier, "Humidifier", 6144, NULL, 2, NULL);
 }
